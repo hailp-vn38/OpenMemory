@@ -7,16 +7,34 @@ let cfg: model_cfg | null = null;
 
 export const load_models = (): model_cfg => {
     if (cfg) return cfg;
-    const p = join(__dirname, "../../../models.yml");
-    if (!existsSync(p)) {
-        console.warn("[MODELS] models.yml not found, using defaults");
+
+    // Try multiple paths for models.yml
+    const paths = [
+        join(__dirname, "../../../models.yml"), // When run from dist/ (prod)
+        join(process.cwd(), "models.yml"), // When in app root directory
+        "/app/data/models.yml", // Docker production
+    ];
+
+    let p = "";
+    for (const tryPath of paths) {
+        if (existsSync(tryPath)) {
+            p = tryPath;
+            break;
+        }
+    }
+
+    if (!p) {
+        console.warn(
+            "[MODELS] models.yml not found in any location, using defaults",
+        );
         return get_defaults();
     }
+
     try {
         const yml = readFileSync(p, "utf-8");
         cfg = parse_yaml(yml);
         console.log(
-            `[MODELS] Loaded models.yml (${Object.keys(cfg).length} sectors)`,
+            `[MODELS] Loaded models.yml from ${p} (${Object.keys(cfg).length} sectors)`,
         );
         return cfg;
     } catch (e) {

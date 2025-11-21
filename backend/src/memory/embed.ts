@@ -3,7 +3,10 @@ import { get_model } from "../core/models";
 import { sector_configs } from "./hsg";
 import { q } from "../core/db";
 import { canonical_tokens_from_text, add_synonym_tokens } from "../utils/text";
-import { BedrockRuntimeClient, InvokeModelCommand } from "@aws-sdk/client-bedrock-runtime";
+import {
+    BedrockRuntimeClient,
+    InvokeModelCommand,
+} from "@aws-sdk/client-bedrock-runtime";
 
 let gem_q: Promise<any> = Promise.resolve();
 export const emb_dim = () => env.vec_dim;
@@ -82,7 +85,9 @@ async function get_sem_emb(t: string, s: string): Promise<number[]> {
         case "ollama":
             return await emb_ollama(t, s);
         case "aws":
-            return await emb_aws(t,s);
+            return await emb_aws(t, s);
+        case "github":
+            return await emb_github(t, s);
         case "local":
             return await emb_local(t, s);
         default:
@@ -226,21 +231,22 @@ async function emb_ollama(t: string, s: string): Promise<number[]> {
     return resize_vec(((await r.json()) as any).embedding, env.vec_dim);
 }
 async function emb_aws(t: string, s: string): Promise<number[]> {
-    if (!env.AWS_REGION) throw new Error("AWS_REGION missing");
-    if (!env.AWS_ACCESS_KEY_ID) throw new Error("AWS_ACCESS_KEY_ID missing");
-    if (!env.AWS_SECRET_ACCESS_KEY) throw new Error("AWS_SECRET_ACCESS_KEY missing");
+    if (!env.aws_region) throw new Error("AWS_REGION missing");
+    if (!env.aws_access_key_id) throw new Error("AWS_ACCESS_KEY_ID missing");
+    if (!env.aws_secret_access_key)
+        throw new Error("AWS_SECRET_ACCESS_KEY missing");
     const m = get_model(s, "aws");
-    const client = new BedrockRuntimeClient({ region: process.env.AWS_REGION });
-    const dim = [256, 512, 1024].find(x => x >= env.vec_dim) ?? 1024;
+    const client = new BedrockRuntimeClient({ region: env.aws_region });
+    const dim = [256, 512, 1024].find((x) => x >= env.vec_dim) ?? 1024;
     const params = {
-            modelId: m, 
-            contentType: "application/json",
-            accept: "*/*",
-            body: JSON.stringify({
-              inputText: t,
-              dimensions: dim
-            })
-    }
+        modelId: m,
+        contentType: "application/json",
+        accept: "*/*",
+        body: JSON.stringify({
+            inputText: t,
+            dimensions: dim,
+        }),
+    };
     const command = new InvokeModelCommand(params);
 
     try {
@@ -250,9 +256,30 @@ async function emb_aws(t: string, s: string): Promise<number[]> {
         const parsedResponse = JSON.parse(jsonString);
         return resize_vec(parsedResponse, env.vec_dim);
     } catch (error) {
-        throw new Error(`AWS: ${error}`)
+        throw new Error(`AWS: ${error}`);
     }
-    
+}
+
+async function emb_github(t: string, s: string): Promise<number[]> {
+    if (!env.github_api_key) throw new Error("GitHub API key missing");
+    if (!env.github_base_url) throw new Error("GitHub base URL missing");
+
+    const base_url = env.github_base_url.replace(/\/$/, "");
+    const model = env.github_model || get_model(s, "github");
+    const r = await fetch(`${base_url}/embeddings`, {
+        method: "POST",
+        headers: {
+            "content-type": "application/json",
+            authorization: `Bearer ${env.github_api_key}`,
+        },
+        body: JSON.stringify({
+            input: t,
+            model: model,
+            dimensions: env.vec_dim,
+        }),
+    });
+    if (!r.ok) throw new Error(`GitHub: ${r.status}`);
+    return ((await r.json()) as any).data[0].embedding;
 }
 
 async function emb_local(t: string, s: string): Promise<number[]> {
@@ -536,9 +563,23 @@ export const getEmbeddingInfo = () => {
         i.batch_api = env.embed_mode === "simple";
         i.model = "embedding-001";
     } else if (env.emb_kind === "aws") {
-        i.configured = !!env.AWS_REGION && !!env.AWS_ACCESS_KEY_ID && !!env.AWS_SECRET_ACCESS_KEY;
+        i.configured =
+            !!env.aws_region &&
+            !!env.aws_access_key_id &&
+            !!env.aws_secret_access_key;
         i.batch_api = env.embed_mode === "simple";
         i.model = "amazon.titan-embed-text-v2:0";
+    } else if (env.emb_kind === "github") {
+        i.configured = !!env.github_api_key && !!env.github_base_url;
+        i.base_url = env.github_base_url;
+        i.batch_api = env.embed_mode === "simple";
+        i.models = {
+            episodic: get_model("episodic", "github"),
+            semantic: get_model("semantic", "github"),
+            procedural: get_model("procedural", "github"),
+            emotional: get_model("emotional", "github"),
+            reflective: get_model("reflective", "github"),
+        };
     } else if (env.emb_kind === "ollama") {
         i.configured = true;
         i.url = env.ollama_url;

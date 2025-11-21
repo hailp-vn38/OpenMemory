@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   openmemory:
     build:
@@ -48,6 +46,12 @@ services:
       - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-}
       - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-}
       - AWS_REGION=${AWS_REGION:-}
+
+      # GitHub Provider
+      - GITHUB_API_KEY=${GITHUB_API_KEY:-}
+      - OM_GITHUB_API_KEY=${OM_GITHUB_API_KEY:-}
+      - OM_GITHUB_BASE_URL=${OM_GITHUB_BASE_URL:-}
+      - OM_GITHUB_MODEL=${OM_GITHUB_MODEL:-}
 
       # Ollama Provider
       - OLLAMA_URL=${OLLAMA_URL:-http://localhost:11434}
@@ -122,6 +126,26 @@ services:
     restart: unless-stopped
     healthcheck:
       test: ['CMD', 'curl', '-f', 'http://localhost:8080/health']
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+  dashboard:
+    build:
+      context: ./dashboard
+      dockerfile: Dockerfile
+    container_name: openmemory-dashboard
+    ports:
+      - '3333:3000'
+    environment:
+      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:8080}
+      - NEXT_PUBLIC_API_KEY=${OM_API_KEY:-openmemory_secret_key_12345}
+    # depends_on:
+    #   openmemory:
+    #     condition: service_started
+    restart: unless-stopped
+    healthcheck:
+      test: ['CMD', 'curl', '-f', 'http://192.168.1.120:3333']
       interval: 30s
       timeout: 10s
       retries: 3

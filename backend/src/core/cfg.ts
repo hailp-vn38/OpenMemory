@@ -47,12 +47,18 @@ export const env = {
     openai_model: process.env.OM_OPENAI_MODEL,
     gemini_key:
         process.env.GEMINI_API_KEY || process.env.OM_GEMINI_API_KEY || "",
-    aws_model: str(
-        process.env.AWS_REGION,
-        process.env.AWS_ACCESS_KEY_ID,
-        process.env.AWS_SECRET_ACCESS_KEY
-    ),
-          
+    aws_region: process.env.AWS_REGION || process.env.OM_AWS_REGION || "",
+    aws_access_key_id:
+        process.env.AWS_ACCESS_KEY_ID || process.env.OM_AWS_ACCESS_KEY_ID || "",
+    aws_secret_access_key:
+        process.env.AWS_SECRET_ACCESS_KEY ||
+        process.env.OM_AWS_SECRET_ACCESS_KEY ||
+        "",
+    github_api_key:
+        process.env.GITHUB_API_KEY || process.env.OM_GITHUB_API_KEY || "",
+    github_base_url: process.env.OM_GITHUB_BASE_URL || "",
+    github_model: process.env.OM_GITHUB_MODEL || "",
+
     ollama_url: str(
         process.env.OLLAMA_URL || process.env.OM_OLLAMA_URL,
         "http://localhost:11434",
